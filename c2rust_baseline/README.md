@@ -39,7 +39,7 @@ Tests and tooling referenced here come from that project; please attribute the a
 
 ## 1) Fetch and build coreutils (once)
 ```sh
-export REPO_ROOT=/home/brao/Desktop/C2VerifiedRust      # change to your clone path
+export REPO_ROOT=~/C2VerifiedRust                       # change to your clone path
 export COREUTILS_SRC=/tmp/coreutils                     # where coreutils will be cloned/built
 export CORPUS_DIR="$REPO_ROOT/translated_coreutils"     # where translated C/Rust will be written
 
@@ -49,7 +49,7 @@ This clones to `$COREUTILS_SRC`, runs `bootstrap`, `configure`, and `make`.
 
 ## 2) Run the translator for one program (example: `cat`)
 ```sh
-python3 c2rust_mechanical_copy/create_c_and_rust_versions.py \
+python3 c2rust_baseline/create_c_and_rust_versions.py \
   --program_name cat \
   --coreutils_dir "$COREUTILS_SRC" \
   --corpus_dir "$CORPUS_DIR"
