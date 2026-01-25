@@ -43,7 +43,7 @@ export REPO_ROOT=~/C2VerifiedRust                       # change to your clone p
 export COREUTILS_SRC=/tmp/coreutils                     # where coreutils will be cloned/built
 export CORPUS_DIR="$REPO_ROOT/translated_coreutils"     # where translated C/Rust will be written
 
-bash "$REPO_ROOT/c2rust_mechanical_copy/download_coreutils.sh"
+bash "$REPO_ROOT/c2rust_baseline/download_coreutils.sh"
 ```
 This clones to `$COREUTILS_SRC`, runs `bootstrap`, `configure`, and `make`.
 
@@ -98,7 +98,7 @@ If it links cleanly, you have a working translated binary in `target/debug/cat`.
 ## 5) Run coreutils tests via the harness
 Use the generic runner to select C-passing tests and rerun on Rust:
 ```sh
-cd "$REPO_ROOT/c2rust_mechanical_copy"
+cd "$REPO_ROOT/c2rust_baseline"
 PATH="$HOME/.cargo/bin:/usr/lib/llvm-15/bin:$PATH" \
 ./run_c2r_tests.sh cat
 ```
