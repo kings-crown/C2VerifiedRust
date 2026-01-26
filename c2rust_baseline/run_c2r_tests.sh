@@ -5,25 +5,36 @@ set -euo pipefail
 # that subset on Rust. Uses bash to satisfy test harness expectations.
 #
 # Usage: ./run_cat_tests.sh [prog1 [prog2 ...]]
-# Defaults to "cat" if no programs are provided.
+# If no programs are provided, it will run all translated programs found
+# under $CORPUS_DIR (each subdirectory with both c/ and rust/).
 #
 # Env overrides:
 #   REPO_ROOT    - repo root (default: parent of this script)
 #   COREUTILS_SRC- coreutils source dir (default: /tmp/coreutils)
 #   CORPUS_DIR   - corpus output dir containing <prog>/{c,rust} (default: /tmp/c2rust_corpus/coreutils)
 #   TEST_ROOT    - root of tests (default: $REPO_ROOT/c2saferrust/coreutils/tests)
-#   PATH_PREFIX  - PATH additions (default: "$HOME/.cargo/bin:/usr/lib/llvm-15/bin")
-
+#   PATH_PREFIX  - PATH additions (default: "$REPO_ROOT/c2saferrust/coreutils/getlimits:$HOME/.cargo/bin:/usr/lib/llvm-15/bin")
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="${REPO_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 COREUTILS_SRC="${COREUTILS_SRC:-/tmp/coreutils}"
 CORPUS_DIR="${CORPUS_DIR:-/tmp/c2rust_corpus/coreutils}"
 TEST_ROOT="${TEST_ROOT:-$REPO_ROOT/c2saferrust/coreutils/tests}"
-PATH_PREFIX="${PATH_PREFIX:-$HOME/.cargo/bin:/usr/lib/llvm-15/bin}"
+# Prepend helper tool directories so tests can find binaries like `getlimits`.
+PATH_PREFIX="${PATH_PREFIX:-$REPO_ROOT/c2saferrust/coreutils/getlimits:$HOME/.cargo/bin:/usr/lib/llvm-15/bin}"
+# Provide a sane default for AWK, which some tests require (e.g., retry_delay_).
+AWK="${AWK:-awk}"
+export AWK
 
 PROGRAMS=("$@")
 if [[ ${#PROGRAMS[@]} -eq 0 ]]; then
-  PROGRAMS=(cat)
+  if [[ -d "$CORPUS_DIR" ]]; then
+    # Discover program directories that have both C and Rust outputs.
+    mapfile -t PROGRAMS < <(find "$CORPUS_DIR" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | LC_ALL=C sort)
+  fi
+  if [[ ${#PROGRAMS[@]} -eq 0 ]]; then
+    echo "No program directories found under $CORPUS_DIR"
+    exit 1
+  fi
 fi
 
 echo "Repo root:    $REPO_ROOT"
@@ -42,6 +53,12 @@ for prog in "${PROGRAMS[@]}"; do
   TEST_DIR="$TEST_ROOT/$prog"
   C_BIN_DIR="$C_DIR"
   RUST_BIN_DIR="$RUST_DIR/target/debug"
+
+  if [[ ! -d "$C_DIR" || ! -d "$RUST_DIR" ]]; then
+    echo "  Skipping $prog: missing c/ or rust/ under $C_DIR / $RUST_DIR"
+    overall_rc=1
+    continue
+  fi
 
   if [[ ! -d "$TEST_DIR" ]]; then
     echo "  Tests not found: $TEST_DIR (skipping $prog)"

@@ -111,3 +111,26 @@ For multiple programs, list them: `./run_c2r_tests.sh cat head tail` (after each
 - Re-run step 3 whenever you re-run the translator (it wipes the C dir).
 - For other programs, replace `cat` in the commands and in the paths.
 - If `intercept-build` or `c2rust` aren’t found, re-check your PATH export above.
+
+## Troubleshooting (from recent runs)
+- Tests failing with `-v: command not found` or `sleep: missing operand`: set `AWK=awk` (defaulted in `run_c2r_tests.sh`).
+- `getlimits: command not found` in head tests: ensure `$REPO_ROOT/c2saferrust/coreutils/getlimits` is on PATH; the runner’s default `PATH_PREFIX` now includes it.
+- `num_traits::Float` unresolved for translated programs like `tail`: the translator now injects `num-traits = "0.2"` into generated Cargo.toml files; re-run the translator if you hit this.
+- Numerous `unused label/parentheses` warnings from c2rust output are expected; focus on hard errors.
+
+## Patched c2rust notes (tail fixes)
+- Local patches to the c2rust transpiler widen integer and character literals to the caller’s expected integral type and align overflow builtins’ operand types, eliminating `i32`→`i64` mismatches (wip, but works).
+- To use the patched tool:  
+  ```sh
+  CARGO_HOME="$REPO_ROOT/.cargo-local" \
+  cargo +stable install --locked --force --git https://github.com/kings-crown/c2rust.git
+  export PATH="$CARGO_HOME/bin:/usr/lib/llvm-15/bin:$PATH"
+
+  
+  CARGO_HOME=/home/brao/Desktop/.cargo-local \
+  CARGO_TARGET_DIR=/tmp/c2rust-target \
+  cargo +stable install --locked --force --path /home/brao/Desktop/c2rust/c2rust
+  ```
+
+  (Uses the kings-crown/c2rust fork that includes these fixes.)  
+  Then rerun `create_c_and_rust_versions.py` as usual.

@@ -227,6 +227,27 @@ def _ensure_cargo_uses_build_rs(rust_dir: str) -> None:
         text = "\n".join(new_lines)
     cargo_path.write_text(text)
 
+def _ensure_dependency(cargo_path: Path, name: str, version: str) -> None:
+    """Ensure Cargo.toml has a dependency entry with the given name/version."""
+    text = cargo_path.read_text()
+    pattern = re.compile(rf"^\s*{re.escape(name)}\s*=", re.MULTILINE)
+    if pattern.search(text):
+        return
+    if "[dependencies]" not in text:
+        text += "\n[dependencies]\n"
+    lines = text.splitlines()
+    new_lines = []
+    inserted = False
+    for line in lines:
+        new_lines.append(line)
+        if not inserted and line.strip() == "[dependencies]":
+            new_lines.append(f'{name}= "{version}"')
+            inserted = True
+    if not inserted:
+        new_lines.append("[dependencies]")
+        new_lines.append(f'{name}= "{version}"')
+    cargo_path.write_text("\n".join(new_lines))
+
 
 def _map_symbols_to_dependencies(dir_to_search: str) -> Dict[str, Dependencies]:
     syms_to_deps = dict()
@@ -409,6 +430,9 @@ def main():
             f"Could not transpile the program with c2rust:\n{c2r_out}")
         sys.exit(1)
     _LOGGER.info("Successfully transpiled the program with c2rust")
+
+    # Ensure known-needed deps before running cargo fix (e.g., num-traits for f128 Float)
+    _ensure_dependency(Path(out_rust_dir) / "Cargo.toml", "num-traits", "0.2")
 
     # Allowing unused imports because the Rust auto fixer removes the
     # dependency on the library created to contain the helper functions
