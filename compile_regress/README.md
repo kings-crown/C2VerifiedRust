@@ -5,7 +5,9 @@
 - **Patched (local tree):**
   ```bash
   cd /home/brao/Desktop/c2rust
-  cargo run -p c2rust -- --version    # expect 0.21.0-patched.1
+  cargo build -p c2rust-transpile
+  cargo install --locked --force --path c2rust
+  c2rust --version    # expect 0.21.0-patched.1
   export PATH="/home/brao/Desktop/c2rust/target/debug:$HOME/.cargo/bin:/usr/lib/llvm-15/bin:$PATH"
   ```
 
@@ -60,7 +62,7 @@ for f in compile_regress/*.rs; do
 done
 ```
 
-No errors here means the transpiled snippets build. Run with patched PATH, then with stock PATH to compare.
+No errors here means the transpiled snippets build. Run with patched PATH, then with stock PATH to compare. Please be mindful of the PATH that gets picked up.
 
 ### 4) End-to-end `tail` pipeline (optional)
 
