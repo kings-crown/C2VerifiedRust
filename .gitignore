@@ -3,3 +3,6 @@ __pycache__/
 models/
 c2saferrust/
 translated_coreutils/
+compile_regress/*.rs
+simple_rust/
+simple_rust_WIP/

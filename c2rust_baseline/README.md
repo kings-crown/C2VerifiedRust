@@ -39,7 +39,7 @@ Tests and tooling referenced here come from that project; please attribute the a
 
 ## 1) Fetch and build coreutils (once)
 ```sh
-export REPO_ROOT=~/C2VerifiedRust                       # change to your clone path
+export REPO_ROOT=~/Desktop/C2VerifiedRust                       # change to your clone path
 export COREUTILS_SRC=/tmp/coreutils                     # where coreutils will be cloned/built
 export CORPUS_DIR="$REPO_ROOT/translated_coreutils"     # where translated C/Rust will be written
 
