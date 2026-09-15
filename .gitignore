@@ -1,8 +1,51 @@
+# Local environments, external checkouts, and provider configuration.
 .venv/
 __pycache__/
+*.py[cod]
 models/
 c2saferrust/
-translated_coreutils/
-compile_regress/*.rs
-simple_rust/
-simple_rust_WIP/
+
+# Local prototype workspaces, inputs, and fixtures.
+/demo/
+/demo_codex/
+/demo_inputs/
+/simple_rust/
+/simple_rust_WIP/
+
+# Local prototype plans and specifications.
+/plans/c_isalpha.json
+/plans/c_isdigit.json
+/plans/c_isspace.json
+/plans/c_tolower.json
+/plans/c_toupper.json
+/plans/pacman_valid_tile_pos.json
+/plans/pacman_valid_tile_pos_safe.json
+/plans/smaz_decompress_verbatim.json
+/specs/pacman_valid_tile_pos.md
+/specs/smaz_decompress_verbatim.md
+
+# Generated translation workspaces and regression output.
+/generated/
+/translated_coreutils/
+/compile_regress/*.rs
+/compile_regress/*.rlib
+
+# Generated build capture, inventories, and compiler output.
+compile_commands.json
+inventory.csv
+target/
+*.kani.bak
+
+# Generated verification evidence, diagnostics, and repair input.
+/runs/
+*.log
+kani_report.txt
+kani_summary.json
+evidence.json
+e0_no_unsafe_marker.json
+reconciliation.json
+repair_prompt.md
+
+# Internal reports and generated presentation output.
+/HCSS_*.md
+/HCSS_*.pptx
