@@ -20,6 +20,9 @@ fn config() -> TranspilerConfig {
         fail_on_multiple: false,
         filter: None,
         debug_relooper_labels: false,
+        cross_checks: false,
+        cross_check_backend: Default::default(),
+        cross_check_configs: Default::default(),
         prefix_function_names: None,
         translate_asm: true,
         use_c_loop_info: true,
@@ -53,11 +56,21 @@ fn config() -> TranspilerConfig {
     }
 }
 
-fn transpile_and_compile(c_path: &Path) {
+fn transpile_and_compile(fixture_path: &Path) {
+    // Keep every generated file out of the source checkout, including on failures.
+    let temp_dir = tempfile::tempdir().expect("failed to create fixture directory");
+    let c_path = temp_dir.path().join(fixture_path.file_name().unwrap());
+    fs::copy(fixture_path, &c_path).expect("failed to copy C fixture");
+    let runtime = c_path
+        .file_stem()
+        .unwrap()
+        .to_string_lossy()
+        .ends_with("_runtime");
+
     // Ensure clang accepts the C input.
     let status = Command::new("clang")
         .args(["-c", "-o", "/dev/null", "-w"])
-        .arg(c_path)
+        .arg(&c_path)
         .status()
         .expect("failed to run clang");
     assert!(status.success(), "clang failed for {}", c_path.display());
@@ -74,18 +87,25 @@ fn transpile_and_compile(c_path: &Path) {
         .unwrap()
         .to_string_lossy()
         .replace('.', "_");
-    let rlib_path = c_path.with_extension("rlib");
+    let rust_output = c_path.with_extension(if runtime { "rust-bin" } else { "rlib" });
 
+    // Runtime fixtures take addresses, emitting raw_ref_op attributes. Match the
+    // upstream snapshot toolchain for them; keep the original compile checks on stable.
     let status = Command::new("rustc")
+        .arg(if runtime {
+            "+nightly-2023-04-15"
+        } else {
+            "+stable"
+        })
         .args([
             "--crate-type",
-            "lib",
+            if runtime { "bin" } else { "lib" },
             "--edition",
             "2021",
             "--crate-name",
             &crate_name,
             "-o",
-            rlib_path.to_str().unwrap(),
+            rust_output.to_str().unwrap(),
             "-Awarnings",
         ])
         .arg(&rs_path)
@@ -93,8 +113,42 @@ fn transpile_and_compile(c_path: &Path) {
         .expect("failed to run rustc");
     assert!(status.success(), "rustc failed for {}", c_path.display());
 
-    let _ = fs::remove_file(rlib_path);
-    let _ = fs::remove_file(rs_path);
+    if runtime {
+        let c_output = c_path.with_extension("c-bin");
+        let status = Command::new("clang")
+            .arg(&c_path)
+            .arg("-o")
+            .arg(&c_output)
+            .status()
+            .expect("failed to build C executable");
+        assert!(
+            status.success(),
+            "clang link failed for {}",
+            c_path.display()
+        );
+
+        let expected = Command::new(&c_output)
+            .output()
+            .expect("failed to run C executable");
+        assert!(
+            expected.status.success(),
+            "C fixture {} failed its own checks: {:?}",
+            fixture_path.display(),
+            expected
+        );
+        let actual = Command::new(&rust_output)
+            .output()
+            .expect("failed to run Rust executable");
+        assert_eq!(
+            actual.status.code(),
+            expected.status.code(),
+            "runtime result differs for {}: {:?}",
+            fixture_path.display(),
+            actual
+        );
+        assert_eq!(actual.stdout, expected.stdout);
+        assert_eq!(actual.stderr, expected.stderr);
+    }
 }
 
 #[test]
@@ -106,4 +160,3 @@ fn compile_regressions() {
         }
     }
 }
-

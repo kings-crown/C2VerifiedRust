@@ -5,28 +5,35 @@ This guide shows how to translate a Coreutils program (e.g., cat) from C to Rust
 ## 0) Prerequisites
 - Linux with `git`, `gcc`, `make`, `python3`, `perl`, `cmake`-style build basics.
 - Packages for Coreutils bootstrap: `autopoint`, `gettext`, `gperf`, `texinfo`, `texlive`, `texlive-latex-base`.
-- Clang tools for `intercept-build`: `clang-tools-15` (provides `intercept-build` at `/usr/lib/llvm-15/bin`).
-- Rust toolchain via rustup (stable) and `c2rust` installed via cargo.
+- Clang tools for `intercept-build`: `clang-tools-18` (provides `intercept-build` at `/usr/lib/llvm-18/bin`).
+- Rust toolchain via rustup (stable) and the patched local `c2rust` fork.
+- LLVM 18 development libraries: `llvm-18-dev` and `libclang-18-dev` (including the Clang static libraries required to build C2Rust).
 
 ### Install the key tools (Debian/Ubuntu style)
 ```sh
 sudo apt-get update
 sudo apt-get install -y \
   git build-essential autopoint gettext gperf texinfo texlive texlive-latex-base \
-  clang-tools-15
+  clang-18 clang-tools-18 llvm-18-dev libclang-18-dev
 
 # Install rustup + stable toolchain (if not already)
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 rustup default stable
 
-# Install c2rust
-export PATH="$HOME/.cargo/bin:$PATH"
-cargo install c2rust --force
+# Build and install the validated local fork (both command-line executables).
+export PATH="$HOME/.cargo/bin:/usr/lib/llvm-18/bin:$PATH"
+export LLVM_CONFIG_PATH=/usr/lib/llvm-18/bin/llvm-config
+export CLANG_PATH=/usr/lib/llvm-18/bin/clang
+export LIBCLANG_PATH=/usr/lib/llvm-18/lib
+CARGO_TARGET_DIR=/tmp/c2rust-upgrade-llvm18-target \
+  cargo +stable install --locked --force --path /home/brao/Desktop/c2rust/c2rust
+c2rust --version
+c2rust-transpile --version
 ```
 
 ### PATH you need for every run
 ```sh
-export PATH="$HOME/.cargo/bin:/usr/lib/llvm-15/bin:$PATH"
+export PATH="$HOME/.cargo/bin:/usr/lib/llvm-18/bin:$PATH"
 ```
 
 ### Get the c2saferrust repository (for tests, slicer, attribution)
@@ -91,7 +98,7 @@ This adds the C archive path, links `libcatdeps.a`, and brings in the extra libs
 ## 4) Build the Rust crate (if you want to re-run manually)
 ```sh
 cd "$CORPUS_DIR/cat/rust"
-PATH="$HOME/.cargo/bin:/usr/lib/llvm-15/bin:$PATH" cargo build
+PATH="$HOME/.cargo/bin:/usr/lib/llvm-18/bin:$PATH" cargo build
 ```
 If it links cleanly, you have a working translated binary in `target/debug/cat`. If you see missing-symbol errors for gnulib helpers, re-run `make && ar rcs libcatdeps.a *.o` in `$CORPUS_DIR/cat/c` (the translator regenerates the C dir) and rebuild.
 
@@ -99,7 +106,7 @@ If it links cleanly, you have a working translated binary in `target/debug/cat`.
 Use the generic runner to select C-passing tests and rerun on Rust:
 ```sh
 cd "$REPO_ROOT/c2rust_baseline"
-PATH="$HOME/.cargo/bin:/usr/lib/llvm-15/bin:$PATH" \
+PATH="$HOME/.cargo/bin:/usr/lib/llvm-18/bin:$PATH" \
 ./run_c2r_tests.sh cat
 ```
 - The script builds both C/Rust, runs all `c2saferrust/coreutils/tests/cat/*.sh` on C, then only the passing ones on Rust.
@@ -119,18 +126,20 @@ For multiple programs, list them: `./run_c2r_tests.sh cat head tail` (after each
 - Numerous `unused label/parentheses` warnings from c2rust output are expected; focus on hard errors.
 
 ## Patched c2rust notes (tail fixes)
-- Local patches to the c2rust transpiler widen integer and character literals to the caller’s expected integral type and align overflow builtins’ operand types, eliminating `i32`→`i64` mismatches (wip, but works).
-- To use the patched tool:  
-  ```sh
-  CARGO_HOME="$REPO_ROOT/.cargo-local" \
-  cargo +stable install --locked --force --git https://github.com/kings-crown/c2rust.git
-  export PATH="$CARGO_HOME/bin:/usr/lib/llvm-15/bin:$PATH"
 
-  
-  CARGO_HOME=/home/brao/Desktop/.cargo-local \
-  CARGO_TARGET_DIR=/tmp/c2rust-target \
-  cargo +stable install --locked --force --path /home/brao/Desktop/c2rust/c2rust
+- The local fork carries expected-type handling for integer and character literals, unary integer promotions, and overflow builtin operand/result conversions.
+- Validate changes using [the seven regression fixtures](../compile_regress/README.md) before installing the fork. The overflow fixtures cover selected width and boundary cases, not every C builtin type combination.
+- Reinstall both `c2rust` and `c2rust-transpile` from the validated checkout with one command:
+
+  ```sh
+  export PATH="$HOME/.cargo/bin:/usr/lib/llvm-18/bin:$PATH"
+  export LLVM_CONFIG_PATH=/usr/lib/llvm-18/bin/llvm-config
+  export CLANG_PATH=/usr/lib/llvm-18/bin/clang
+  export LIBCLANG_PATH=/usr/lib/llvm-18/lib
+  CARGO_TARGET_DIR=/tmp/c2rust-upgrade-llvm18-target \
+    cargo +stable install --locked --force --path /home/brao/Desktop/c2rust/c2rust
   ```
 
-  (Uses the kings-crown/c2rust fork that includes these fixes.)  
-  Then rerun `create_c_and_rust_versions.py` as usual.
+Record the full tested Git revision in the project README, then rerun
+`create_c_and_rust_versions.py` as usual. The package version alone does not
+identify the fork's patches.

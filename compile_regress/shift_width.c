@@ -11,4 +11,3 @@ long shift_with_suffix(void) {
     long x = 1L << 31;
     return x;
 }
-

@@ -7,4 +7,3 @@ off_t demo(off_t n_bytes) {
     off_t minus_n = 0 - n_bytes;
     return minus_n;
 }
-

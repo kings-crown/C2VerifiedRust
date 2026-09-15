@@ -5,4 +5,3 @@ unsigned subtract_underflow(void) {
     unsigned u = 0 - 1;
     return u;
 }
-

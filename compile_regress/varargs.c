@@ -5,4 +5,3 @@ void varargs_demo(void) {
     printf("%d\n", 0);
     printf("%ld\n", 0L);
 }
-

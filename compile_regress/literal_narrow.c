@@ -5,4 +5,3 @@ int narrow_hex(void) {
     int x = 0x80000000;
     return x;
 }
-

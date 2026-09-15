@@ -1,70 +1,89 @@
-## Testing patched vs. stock `c2rust`
+# C2Rust regression checks
 
-### 1) Select the `c2rust` binary
+These seven fixtures exercise the local C2Rust fork's literal, integer-promotion,
+and overflow patches:
 
-- **Patched (local tree):**
-  ```bash
-  cd /home/brao/Desktop/c2rust
-  cargo build -p c2rust-transpile
-  cargo install --locked --force --path c2rust
-  c2rust --version    # expect 0.21.0-patched.1
-  export PATH="/home/brao/Desktop/c2rust/target/debug:$HOME/.cargo/bin:/usr/lib/llvm-15/bin:$PATH"
-  ```
+| Fixtures | Check |
+| --- | --- |
+| `offt_minus.c`, `shift_width.c`, `unsigned_sub.c`, `literal_narrow.c`, `varargs.c` | Transpile, then compile the generated Rust with stable Rust. |
+| `overflow_runtime.c` | Compare C and Rust results for add/subtract/multiply overflow builtins, including narrow operands with wider outputs and boundary flags/results. |
+| `unary_promotions_runtime.c` | Compare C and Rust results for unary `+`, `-`, `~`, and the promoted result widths. |
 
-- **Stock (crates.io):**
-  ```bash
-  cargo install --locked c2rust
-  export PATH="$HOME/.cargo/bin:/usr/lib/llvm-15/bin:$PATH"
-  c2rust --version                    # expect 0.21.0
-  ```
+The two runtime fixtures use `nightly-2023-04-15`, matching upstream snapshot
+tests. Address-taking in generated code can emit `#![feature(raw_ref_op)]`.
+The original five fixtures check compilation only; they are not runtime
+equivalence tests. Overflow coverage is limited to the cases in the fixture;
+it does not establish correctness for every operand/output type combination.
+Mixed signedness and narrowing output types remain known limitations of the
+existing overflow patch.
 
-Switching PATH between these lets you compare behaviors.
+## 1) Select the build tools
 
-### 2) Transpile the regression snippets
-
-From `/home/brao/Desktop/C2VerifiedRust`:
-
-```bash
-python3 - <<'PY' >/tmp/compile_commands.json
-import json
-base="/home/brao/Desktop/C2VerifiedRust"
-files=[
-  "compile_regress/offt_minus.c",
-  "compile_regress/shift_width.c",
-  "compile_regress/unsigned_sub.c",
-  "compile_regress/literal_narrow.c",
-  "compile_regress/varargs.c",
-]
-json.dump([{
-  "directory": base,
-  "command": f"clang -c -o /dev/null -w {base}/{c}",
-  "file": f"{base}/{c}",
-} for c in files], open("/tmp/compile_commands.json","w"))
-PY
-
-c2rust-transpile --overwrite-existing /tmp/compile_commands.json
-```
-
-This regenerates the `.rs` files in `compile_regress/` using the `c2rust-transpile` on PATH.
-
-### 3) Compile the generated Rust
-
-Still in `/home/brao/Desktop/C2VerifiedRust`:
+The local build uses the complete LLVM 18 development installation, including
+`libclangBasic.a`. On Debian/Ubuntu, the relevant packages are `clang-18`,
+`clang-tools-18`, `llvm-18-dev`, and `libclang-18-dev`.
 
 ```bash
-sysroot=$(rustc --print sysroot)
-for f in compile_regress/*.rs; do
-  stem=${f%.rs}; stem=${stem##*/}
-  rustc --sysroot "$sysroot" --edition 2021 \
-        --crate-type lib --crate-name "$stem" \
-        -o "/tmp/lib${stem}.rlib" \
-        "$f"
-done
+export PATH="$HOME/.cargo/bin:/usr/lib/llvm-18/bin:$PATH"
+export LLVM_CONFIG_PATH=/usr/lib/llvm-18/bin/llvm-config
+export CLANG_PATH=/usr/lib/llvm-18/bin/clang
+export LIBCLANG_PATH=/usr/lib/llvm-18/lib
+export CARGO_TARGET_DIR=/tmp/c2rust-upgrade-llvm18-target
+
+rustup toolchain install nightly-2023-04-15 --profile minimal
 ```
 
-No errors here means the transpiled snippets build. Run with patched PATH, then with stock PATH to compare. Please be mindful of the PATH that gets picked up.
+Use `cargo +stable` to build the transpiler. The fork's workspace default nightly
+is for its older compiler-internals tooling.
 
-### 4) End-to-end `tail` pipeline (optional)
+## 2) Copy the project regressions into the fork
+
+The harness stored here is an integration test for the sibling C2Rust crate;
+this project's `c2rust-transpile/` directory is not a standalone Cargo package.
+
+```bash
+cd /home/brao/Desktop/c2rust
+mkdir -p c2rust-transpile/tests/compile_regress
+cp ../C2VerifiedRust/c2rust-transpile/tests/compile_regress.rs \
+   c2rust-transpile/tests/
+cp ../C2VerifiedRust/compile_regress/*.c \
+   c2rust-transpile/tests/compile_regress/
+```
+
+## 3) Build and run the tests
+
+```bash
+cargo +stable build --locked --release -p c2rust --bins
+cargo +stable test --locked --release \
+  -p c2rust-transpile --test compile_regress -- --nocapture
+
+# Also run the upstream transpiler package tests.
+cargo +stable test --locked --release -p c2rust-transpile
+```
+
+The regression harness copies each C fixture into a temporary directory and
+keeps generated Rust, compile databases, libraries, and executables there. It
+removes those files on success or failure. Cargo build output stays under the
+`CARGO_TARGET_DIR` in `/tmp`.
+
+These commands test the checked-out source. After successful validation, install
+both command-line executables from the same checkout:
+
+```bash
+cargo +stable install --locked --force --path c2rust
+hash -r
+c2rust --version
+c2rust-transpile --version
+git rev-parse HEAD
+```
+
+One install command installs both `c2rust` and `c2rust-transpile`. Record the full
+fork revision with the Rust and LLVM versions in the project README; the package
+version alone does not identify the local patches.
+The current tested revision and remaining dependency warnings are recorded in
+[the project README](../README.md#run-verification).
+
+## Optional: end-to-end `tail` pipeline
 
 Using whichever binary is on PATH:
 
@@ -78,4 +97,4 @@ python3 create_c_and_rust_versions.py \
 ./run_c2r_tests.sh tail
 ```
 
-This rebuilds C and Rust for `tail` and runs the curated test subset; use patched vs. stock PATH to see the difference.
+This rebuilds C and Rust for `tail` and runs the curated test subset. Set `COREUTILS_SRC` and `CORPUS_DIR` as described in [the baseline walkthrough](../c2rust_baseline/README.md).
